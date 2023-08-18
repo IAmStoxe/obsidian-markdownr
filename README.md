@@ -4,9 +4,8 @@ Android app that converts an URL to markdown, and lets you share it to your favo
 
 I've written this app to save articles I found interesting to a note taking app that uses markdown and git to sync notes to my pc.
 
-[<img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png"
-     alt="Get it on F-Droid"
-     height="80">](https://f-droid.org/packages/com.sanzoghenzo.markdownr/)
+[![Release](https://github.com/IAmStoxe/obsidian-markdownr/actions/workflows/release.yml/badge.svg)](https://github.com/IAmStoxe/obsidian-markdownr/actions/workflows/release.yml)
+
 
 ## Features
 
