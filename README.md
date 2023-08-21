@@ -2,7 +2,7 @@
 
 Convert web pages to markdown and integrate seamlessly with Obsidian.
 
-Original app by sanzoghenzo. Fork by [@IAmStoxe](https://github.com/IAmStoxe).
+Original app by [@sanzoghenzo](https://github.com/sanzoghenzo). Fork by [@IAmStoxe](https://github.com/IAmStoxe).
 
 ## Description
 
