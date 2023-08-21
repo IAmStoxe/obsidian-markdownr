@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,6 +11,9 @@ import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
+import 'obsidian_settings.dart';
+
+import 'package:android_intent/android_intent.dart';
 
 void main() {
   runApp(const MyApp());
@@ -49,6 +53,14 @@ class _MyHomePageState extends State<MyHomePage> {
   bool includeFrontMatter = true;
   bool includeExcerpt = true;
 
+  ObsidianSettings obsidianSettings = ObsidianSettings(
+    vaultName: 'default-vault',
+    filepath: '',
+    mode: 'append',
+    daily: false,
+    heading: '',
+  );
+
   Future<bool> getSettings(String settingName,
       {bool defaultValue = false}) async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -71,25 +83,82 @@ class _MyHomePageState extends State<MyHomePage> {
     Share.share(markdown);
   }
 
-  String generateObsidianURI(String markdown) {
-    // URI encoding
-    String encodedMarkdown =
-        markdown.replaceAll(' ', '%20').replaceAll('\n', '%0A');
-    // Construct the URI (assuming the vault name is "default-vault")
-    return 'obsidian://advanced-uri?vault=default-vault&daily=false&data=$encodedMarkdown&mode=append';
+  String sanitizeFilename(String filename, [String substitutionChar = '_']) {
+    const invalidChars = r'\/:*?<>|';
+    return filename.split('').map((char) {
+      if (invalidChars.contains(char)) {
+        return substitutionChar;
+      }
+      return char;
+    }).join('');
   }
 
-  void _shareToObsidian() {
-    String obsidianUri = generateObsidianURI(markdown);
-    Share.share(obsidianUri);
+  String generateObsidianURI() {
+    // Start constructing the Obsidian advanced URI.
+    List<String> parameters = [];
+
+    parameters.add('vault=${obsidianSettings.vaultName}');
+    parameters.add('mode=${obsidianSettings.mode}');
+    parameters.add('clipboard=true');
+
+    if (obsidianSettings.daily) {
+      parameters.add('daily=true');
+    }
+
+    if (obsidianSettings.heading != null &&
+        obsidianSettings.heading!.isNotEmpty) {
+      parameters.add('heading=${Uri.encodeFull(obsidianSettings.heading!)}');
+    }
+
+    if (obsidianSettings.filepath.isNotEmpty) {
+      parameters.add(
+          'filepath=${Uri.encodeFull(sanitizeFilename(obsidianSettings.filepath))}');
+    }
+
+    return 'obsidian://advanced-uri?${parameters.join('&')}';
   }
 
-  void _toClipboard() {
-    Clipboard.setData(ClipboardData(text: markdown)).then((_) {
+  void _shareToObsidian() async {
+    _toClipboard();
+
+    // Generate the Obsidian URI using the function
+    String obsidianUri = generateObsidianURI();
+
+    if (Platform.isAndroid) {
+      final intent = AndroidIntent(
+        action: 'android.intent.action.VIEW',
+        data: obsidianUri,
+        package: 'md.obsidian',
+      );
+      await intent.launch();
+    } else {
+      // Currently, only Android is supported. This can be expanded in the future.
+      // print("Platform not supported.");
+    }
+    _toClipboard(markdown, false);
+  }
+
+  void _openObsidianSettings() {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (context) => ObsidianSettingsPage(
+        settings: obsidianSettings,
+        onSave: (updatedSettings) {
+          setState(() {
+            obsidianSettings = updatedSettings;
+          });
+        },
+      ),
+    ));
+  }
+
+void _toClipboard([String? text, bool showToast = true]) {
+  Clipboard.setData(ClipboardData(text: text ?? markdown)).then((_) {
+    if (showToast) {
       ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Copied to your clipboard!')));
-    });
-  }
+    }
+  });
+}
 
   void fromIntent(String value) async {
     _controller.text = value;
@@ -98,9 +167,9 @@ class _MyHomePageState extends State<MyHomePage> {
       url = value;
       markdown = md;
     });
-    if (markdown.isNotEmpty) {
-      Share.share(markdown);
-    }
+    // if (markdown.isNotEmpty) {
+    //   Share.share(markdown);
+    // }
   }
 
   @override
@@ -123,6 +192,13 @@ class _MyHomePageState extends State<MyHomePage> {
     getSettings("includeFrontMatter")
         .then((value) => includeFrontMatter = value);
     getSettings("includeExcerpt").then((value) => includeExcerpt = value);
+
+    // Load persisted Obsidian settings
+    ObsidianSettings.load().then((loadedSettings) {
+      setState(() {
+        obsidianSettings = loadedSettings;
+      });
+    });
   }
 
   @override
@@ -137,6 +213,10 @@ class _MyHomePageState extends State<MyHomePage> {
       appBar: AppBar(
         title: Text(widget.title),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: _openObsidianSettings,
+          ),
           PopupMenuButton<int>(
             onSelected: (int result) {
               switch (result) {
